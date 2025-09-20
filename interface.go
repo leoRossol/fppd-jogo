@@ -14,13 +14,14 @@ type Cor = termbox.Attribute
 
 // Definições de cores utilizadas no jogo
 const (
-	CorPadrao     Cor = termbox.ColorDefault
-	CorCinzaEscuro    = termbox.ColorDarkGray
-	CorVermelho       = termbox.ColorRed
-	CorVerde          = termbox.ColorGreen
-	CorParede         = termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim
-	CorFundoParede    = termbox.ColorDarkGray
-	CorTexto          = termbox.ColorDarkGray
+	CorPadrao      Cor = termbox.ColorDefault
+	CorCinzaEscuro     = termbox.ColorDarkGray
+	CorVermelho        = termbox.ColorRed
+	CorVerde           = termbox.ColorGreen
+	CorAmarelo         = termbox.ColorYellow
+	CorParede          = termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim
+	CorFundoParede     = termbox.ColorDarkGray
+	CorTexto           = termbox.ColorDarkGray
 )
 
 // EventoTeclado representa uma ação detectada do teclado (como mover, sair ou interagir)
@@ -57,7 +58,7 @@ func interfaceLerEventoTeclado() EventoTeclado {
 }
 
 // Renderiza todo o estado atual do jogo na tela
-func interfaceDesenharJogo(jogo *Jogo) {
+func interfaceDesenharJogo(jogo *Jogo, armadilhas []*Armadilha, moeda *Moeda) {
 	interfaceLimparTela()
 
 	// Desenha todos os elementos do mapa
@@ -66,6 +67,19 @@ func interfaceDesenharJogo(jogo *Jogo) {
 			interfaceDesenharElemento(x, y, elem)
 		}
 	}
+
+	//desenhar armadilhas sobre o mapa
+	for _, a := range armadilhas {
+		if a.Ativa {
+			interfaceDesenharElemento(a.X, a.Y, ArmadilhaElem)
+		}
+	}
+
+	//desenha a moeda sobre o mapa
+	interfaceDesenharElemento(moeda.X, moeda.Y, MoedaElem)
+
+	//denha o monstro sobre o mapa
+	interfaceDesenharElemento(jogo.MonstroX, jogo.MonstroY, MonstroElem)
 
 	// Desenha o personagem sobre o mapa
 	interfaceDesenharElemento(jogo.PosX, jogo.PosY, Personagem)
@@ -105,4 +119,3 @@ func interfaceDesenharBarraDeStatus(jogo *Jogo) {
 		termbox.SetCell(i, len(jogo.Mapa)+3, c, CorTexto, CorPadrao)
 	}
 }
-
