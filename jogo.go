@@ -45,6 +45,15 @@ type ArmadilhaMsg struct {
 // canal armadilhas
 var canalArmadilha = make(chan ArmadilhaMsg)
 
+// config da msg
+type MoedaColetadaMsg struct {
+	Moeda   Moeda
+	Coletada bool
+}
+
+// canal para a feature das moedas
+var canalMoedaColetada = make(chan MoedaColetadaMsg)
+
 // Elementos visuais do jogo
 var (
 	Personagem    = Elemento{'☺', CorCinzaEscuro, CorPadrao, true}
@@ -164,15 +173,10 @@ func moedaColetada(moeda *Moeda, jogo *Jogo) bool {
 	return moeda.X == jogo.PosX && moeda.Y == jogo.PosY
 }
 
-func moedaLoop(moeda *Moeda, jogo *Jogo, canalMoeda chan<- Moeda, done <-chan struct{}) {
+func moedaLoop(moeda *Moeda, jogo *Jogo, canalMoeda chan<- Moeda, canalMoedaColetada chan<- MoedaColetadaMsg, done <-chan struct{}) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
-
-	type MoedaMsg struct {
-		Moeda    Moeda
-		Coletada bool
-	}
 
 	for {
 		select {
@@ -193,16 +197,23 @@ func moedaLoop(moeda *Moeda, jogo *Jogo, canalMoeda chan<- Moeda, done <-chan st
 		default:
 			// Verifica se a moeda foi coletada pelo jogador
 			if moedaColetada(moeda, jogo) {
+				// Envia mensagem que moeda foi coletada
+				canalMoedaColetada <- MoedaColetadaMsg{
+					Moeda:   *moeda,
+					Coletada: true,
+				}
+				
+				// Incrementa pontos
+				jogo.Pontos++
+				
+				// Gera nova posição para a moeda
 				for {
 					nx := r.Intn(len(jogo.Mapa[0]))
 					ny := r.Intn(len(jogo.Mapa))
 					if jogoPodeMoverPara(jogo, nx, ny) && (nx != jogo.PosX || ny != jogo.PosY) {
 						moeda.X = nx
 						moeda.Y = ny
-						// Envia nova moeda com flag de coletada
 						canalMoeda <- Moeda{X: nx, Y: ny}
-						// Incrementa pontos aqui
-						jogo.Pontos++
 						break
 					}
 				}

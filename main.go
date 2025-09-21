@@ -21,6 +21,7 @@ func main() {
 		canalMonstro := make(chan MonstroMsg)
 		canalArmadilha := make(chan ArmadilhaMsg)
 		canalMoeda := make(chan Moeda)
+		canalMoedaColetada := make(chan MoedaColetadaMsg)
 		canalTeclado := make(chan EventoTeclado)
 		done := make(chan struct{}) //canal pra cancelar routines antigas
 
@@ -67,7 +68,7 @@ func main() {
 		}
 
 		moeda := &Moeda{X: 6, Y: 10}
-		go moedaLoop(moeda, &jogo, canalMoeda, done)
+		go moedaLoop(moeda, &jogo, canalMoeda, canalMoedaColetada, done)
 
 		// Desenha o estado inicial do jogo
 		interfaceDesenharJogo(&jogo, armadilhas, moeda)
@@ -93,7 +94,12 @@ func main() {
 			case novaMoeda := <-canalMoeda:
 				moeda.X = novaMoeda.X
 				moeda.Y = novaMoeda.Y
-				// Removemos o increment do contador daqui, pois agora ele acontece diretamente no moedaLoop
+			case msgMoedaColetada := <-canalMoedaColetada:
+				if msgMoedaColetada.Coletada {
+					// Feature de mudar a posi das armadilhas quando coletar moedas
+					moverTodasArmadilhas(armadilhas, &jogo)
+					jogo.StatusMsg = "Moeda coletada! Novas armadilhas foram posicionadas!"
+				}
 			case evento := <-canalTeclado:
 				if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
 					return
