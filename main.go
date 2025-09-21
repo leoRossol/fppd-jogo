@@ -21,6 +21,7 @@ func main() {
 		canalMonstro := make(chan MonstroMsg)
 		canalArmadilha := make(chan ArmadilhaMsg)
 		canalMoeda := make(chan Moeda)
+		canalTeclado := make(chan EventoTeclado)
 		done := make(chan struct{}) //canal pra cancelar routines antigas
 
 		// Inicializa o jogo
@@ -30,6 +31,9 @@ func main() {
 		}
 
 		jogo.Pontos = -1
+
+		// Inicia a goroutine para ler eventos do teclado
+		go interfaceLerEventoTeclado(canalTeclado)
 
 		//cria o monstro
 		monstro := &Monstro{X: 69, Y: 15}
@@ -90,15 +94,14 @@ func main() {
 				moeda.X = novaMoeda.X
 				moeda.Y = novaMoeda.Y
 				jogo.Pontos++
+			case evento := <-canalTeclado:
+				if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
+					return
+				}
 			case <-time.After(50 * time.Millisecond):
-				//para não travar o loop
+				// para atualizar a tela periodicamente
+				interfaceDesenharJogo(&jogo, armadilhas, moeda)
 			}
-
-			evento := interfaceLerEventoTeclado()
-			if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
-				return
-			}
-			interfaceDesenharJogo(&jogo, armadilhas, moeda)
 		}
 		close(done)
 	}

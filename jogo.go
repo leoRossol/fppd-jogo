@@ -140,7 +140,7 @@ func monstroLoop(monstro *Monstro, jogo *Jogo, canalMonstro chan<- MonstroMsg, d
 		//envia mensagem ao controlador do jogo
 		canalMonstro <- MonstroMsg{X: monstro.X, Y: monstro.Y, Encostou: encostou}
 		//delay para o monstro ir devagar
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 }
 

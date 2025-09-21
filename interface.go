@@ -46,18 +46,23 @@ func interfaceFinalizar() {
 }
 
 // Lê um evento do teclado e o traduz para um EventoTeclado
-func interfaceLerEventoTeclado() EventoTeclado {
-	ev := termbox.PollEvent()
-	if ev.Type != termbox.EventKey {
-		return EventoTeclado{}
-	}
-	if ev.Key == termbox.KeyEsc {
-		return EventoTeclado{Tipo: "sair"}
-	}
-	if ev.Ch == 'e' {
-		return EventoTeclado{Tipo: "interagir"}
-	}
-	return EventoTeclado{Tipo: "mover", Tecla: ev.Ch}
+func interfaceLerEventoTeclado(canal chan EventoTeclado) {
+    for {
+        ev := termbox.PollEvent()
+        if ev.Type != termbox.EventKey {
+            continue
+        }
+        
+        var evento EventoTeclado
+        if ev.Key == termbox.KeyEsc {
+            evento = EventoTeclado{Tipo: "sair"}
+        } else if ev.Ch == 'e' {
+            evento = EventoTeclado{Tipo: "interagir"}
+        } else {
+            evento = EventoTeclado{Tipo: "mover", Tecla: ev.Ch}
+        }
+        canal <- evento
+    }
 }
 
 // Renderiza todo o estado atual do jogo na tela
