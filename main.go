@@ -93,7 +93,7 @@ func main() {
 			case novaMoeda := <-canalMoeda:
 				moeda.X = novaMoeda.X
 				moeda.Y = novaMoeda.Y
-				jogo.Pontos++
+				// Removemos o increment do contador daqui, pois agora ele acontece diretamente no moedaLoop
 			case evento := <-canalTeclado:
 				if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
 					return

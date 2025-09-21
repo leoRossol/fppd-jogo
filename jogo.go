@@ -166,27 +166,48 @@ func moedaColetada(moeda *Moeda, jogo *Jogo) bool {
 
 func moedaLoop(moeda *Moeda, jogo *Jogo, canalMoeda chan<- Moeda, done <-chan struct{}) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	type MoedaMsg struct {
+		Moeda    Moeda
+		Coletada bool
+	}
+
 	for {
-		//player tem que coletar a moeda
-		for !moedaColetada(moeda, jogo) {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			// Muda posição pelo timer - sem incrementar pontos
+			for {
+				nx := r.Intn(len(jogo.Mapa[0]))
+				ny := r.Intn(len(jogo.Mapa))
+				if jogoPodeMoverPara(jogo, nx, ny) && (nx != jogo.PosX || ny != jogo.PosY) {
+					moeda.X = nx
+					moeda.Y = ny
+					canalMoeda <- Moeda{X: nx, Y: ny}
+					break
+				}
+			}
+		default:
+			// Verifica se a moeda foi coletada pelo jogador
+			if moedaColetada(moeda, jogo) {
+				for {
+					nx := r.Intn(len(jogo.Mapa[0]))
+					ny := r.Intn(len(jogo.Mapa))
+					if jogoPodeMoverPara(jogo, nx, ny) && (nx != jogo.PosX || ny != jogo.PosY) {
+						moeda.X = nx
+						moeda.Y = ny
+						// Envia nova moeda com flag de coletada
+						canalMoeda <- Moeda{X: nx, Y: ny}
+						// Incrementa pontos aqui
+						jogo.Pontos++
+						break
+					}
+				}
+			}
 			time.Sleep(50 * time.Millisecond)
 		}
-
-		//apos coletada, escolhe nova posição aleatória válida
-		for {
-			nx := r.Intn(len(jogo.Mapa[0]))
-			ny := r.Intn(len(jogo.Mapa))
-			if jogoPodeMoverPara(jogo, nx, ny) && (nx != jogo.PosX || ny != jogo.PosY) {
-				moeda.X = nx
-				moeda.Y = ny
-				break
-			}
-		}
-		//notifica o loop principal sobre a nova posição
-		canalMoeda <- *moeda
 	}
-}
-
-type MoedaMsg struct {
-	X, Y int
 }
