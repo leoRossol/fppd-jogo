@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 )
@@ -84,12 +85,26 @@ func main() {
 					jogo.StatusMsg = "O MONSTRO TE PEGOU, VOCE MORREU"
 					interfaceDesenharJogo(&jogo, armadilhas, moeda)
 					time.Sleep(2 * time.Second)
+					
+					// Exibe quantas moedas foram coletadas
+					jogo.StatusMsg = "GAME OVER! Você coletou " + fmt.Sprintf("%d", jogo.Pontos) + " moedas antes de morrer. Pressione qualquer tecla para continuar..."
+					interfaceDesenharJogo(&jogo, armadilhas, moeda)
+					
+					// Espera o jogador pressionar uma tecla para continuar
+					<-canalTeclado
 					rodando = false
 				}
 			case <-canalArmadilha:
 				jogo.StatusMsg = "CAIU EM UMA ARMADILHA, VOCE MORREU"
 				interfaceDesenharJogo(&jogo, armadilhas, moeda)
 				time.Sleep(2 * time.Second)
+				
+				// Exibe quantas moedas foram coletadas
+				jogo.StatusMsg = "GAME OVER! Você coletou " + fmt.Sprintf("%d", jogo.Pontos) + " moedas antes de morrer. Pressione qualquer tecla para continuar..."
+				interfaceDesenharJogo(&jogo, armadilhas, moeda)
+				
+				// Espera o jogador pressionar uma tecla para continuar
+				<-canalTeclado
 				rodando = false
 			case novaMoeda := <-canalMoeda:
 				moeda.X = novaMoeda.X
