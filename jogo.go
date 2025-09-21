@@ -48,8 +48,7 @@ var canalArmadilha = make(chan ArmadilhaMsg)
 // Elementos visuais do jogo
 var (
 	Personagem    = Elemento{'☺', CorCinzaEscuro, CorPadrao, true}
-	Inimigo       = Elemento{'☠', CorPadrao, CorPadrao, true}
-	MonstroElem   = Elemento{'☠', CorVermelho, CorPadrao, true}
+	MonstroElem   = Elemento{'☠', CorMagenta, CorPadrao, true}
 	Parede        = Elemento{'▤', CorParede, CorFundoParede, true}
 	Vegetacao     = Elemento{'♣', CorVerde, CorPadrao, false}
 	Vazio         = Elemento{' ', CorPadrao, CorPadrao, false}
@@ -82,8 +81,6 @@ func jogoCarregarMapa(nome string, jogo *Jogo) error {
 			switch ch {
 			case Parede.simbolo:
 				e = Parede
-			case Inimigo.simbolo:
-				e = Inimigo
 			case Vegetacao.simbolo:
 				e = Vegetacao
 			case Personagem.simbolo:
@@ -134,7 +131,7 @@ func jogoMoverElemento(jogo *Jogo, x, y, dx, dy int) {
 }
 
 // controla a monstro
-func monstroLoop(monstro *Monstro, jogo *Jogo) {
+func monstroLoop(monstro *Monstro, jogo *Jogo, canalMonstro chan<- MonstroMsg, done <-chan struct{}) {
 	for {
 		//move em direcao ao player
 		monstroMover(monstro, jogo.PosX, jogo.PosY, jogo)
@@ -142,21 +139,13 @@ func monstroLoop(monstro *Monstro, jogo *Jogo) {
 		encostou := monstroEncostou(monstro, jogo)
 		//envia mensagem ao controlador do jogo
 		canalMonstro <- MonstroMsg{X: monstro.X, Y: monstro.Y, Encostou: encostou}
-
-		//MOVIMENTO ADICIONAL PARA (GAMBIARRA)
-		monstroMover(monstro, jogo.PosX, jogo.PosY, jogo)
-		//verifica se encostou no player
-		encostou = monstroEncostou(monstro, jogo)
-		//envia mensagem ao controlador do jogo
-		canalMonstro <- MonstroMsg{X: monstro.X, Y: monstro.Y, Encostou: encostou}
-
 		//delay para o monstro ir devagar
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 	}
 }
 
 // controla as armadilhas
-func armadilhaLoop(armadilha *Armadilha, jogo *Jogo) {
+func armadilhaLoop(armadilha *Armadilha, jogo *Jogo, canalArmadilha chan<- ArmadilhaMsg, done <-chan struct{}) {
 	for {
 		if armadilhaAtivada(armadilha, jogo) {
 			canalArmadilha <- ArmadilhaMsg{
@@ -175,7 +164,7 @@ func moedaColetada(moeda *Moeda, jogo *Jogo) bool {
 	return moeda.X == jogo.PosX && moeda.Y == jogo.PosY
 }
 
-func moedaLoop(moeda *Moeda, jogo *Jogo) {
+func moedaLoop(moeda *Moeda, jogo *Jogo, canalMoeda chan<- Moeda, done <-chan struct{}) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		//player tem que coletar a moeda
@@ -198,5 +187,6 @@ func moedaLoop(moeda *Moeda, jogo *Jogo) {
 	}
 }
 
-// canal dessa merda
-var canalMoeda = make(chan Moeda)
+type MoedaMsg struct {
+	X, Y int
+}

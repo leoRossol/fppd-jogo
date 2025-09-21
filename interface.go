@@ -6,6 +6,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/nsf/termbox-go"
 )
 
@@ -22,6 +24,7 @@ const (
 	CorParede          = termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim
 	CorFundoParede     = termbox.ColorDarkGray
 	CorTexto           = termbox.ColorDarkGray
+	CorMagenta         = termbox.ColorLightMagenta
 )
 
 // EventoTeclado representa uma ação detectada do teclado (como mover, sair ou interagir)
@@ -78,7 +81,7 @@ func interfaceDesenharJogo(jogo *Jogo, armadilhas []*Armadilha, moeda *Moeda) {
 	//desenha a moeda sobre o mapa
 	interfaceDesenharElemento(moeda.X, moeda.Y, MoedaElem)
 
-	//denha o monstro sobre o mapa
+	//desenha o monstro sobre o mapa
 	interfaceDesenharElemento(jogo.MonstroX, jogo.MonstroY, MonstroElem)
 
 	// Desenha o personagem sobre o mapa
@@ -109,7 +112,8 @@ func interfaceDesenharElemento(x, y int, elem Elemento) {
 // Exibe uma barra de status com informações úteis ao jogador
 func interfaceDesenharBarraDeStatus(jogo *Jogo) {
 	// Linha de status dinâmica
-	for i, c := range jogo.StatusMsg {
+	status := fmt.Sprintf("%s | Moedas: %d", jogo.StatusMsg, jogo.Pontos)
+	for i, c := range status {
 		termbox.SetCell(i, len(jogo.Mapa)+1, c, CorTexto, CorPadrao)
 	}
 

@@ -17,69 +17,89 @@ func main() {
 		mapaFile = os.Args[1]
 	}
 
-	// Inicializa o jogo
-	jogo := jogoNovo()
-	if err := jogoCarregarMapa(mapaFile, &jogo); err != nil {
-		panic(err)
-	}
+	for {
+		canalMonstro := make(chan MonstroMsg)
+		canalArmadilha := make(chan ArmadilhaMsg)
+		canalMoeda := make(chan Moeda)
+		done := make(chan struct{}) //canal pra cancelar routines antigas
 
-	//cria o monstro
-	monstro := &Monstro{X: 1, Y: 1}
-	go monstroLoop(monstro, &jogo)
+		// Inicializa o jogo
+		jogo := jogoNovo()
+		if err := jogoCarregarMapa(mapaFile, &jogo); err != nil {
+			panic(err)
+		}
 
-	//cria as armadilhas
-	armadilhas := []*Armadilha{
-		{X: 6, Y: 14, Ativa: true, ID: 1},
-		{X: 10, Y: 7, Ativa: true, ID: 2},
-		{X: 20, Y: 5, Ativa: true, ID: 3},
-		{X: 30, Y: 10, Ativa: true, ID: 4},
-		{X: 40, Y: 15, Ativa: true, ID: 5},
-		{X: 50, Y: 20, Ativa: true, ID: 6},
-		{X: 60, Y: 8, Ativa: true, ID: 7},
-		{X: 25, Y: 18, Ativa: true, ID: 8},
-		{X: 15, Y: 22, Ativa: true, ID: 9},
-		{X: 35, Y: 25, Ativa: true, ID: 10},
-	}
-	for _, a := range armadilhas {
-		go armadilhaLoop(a, &jogo)
-	}
+		jogo.Pontos = -1
 
-	moeda := &Moeda{X: 2, Y: 2}
-	go moedaLoop(moeda, &jogo)
+		//cria o monstro
+		monstro := &Monstro{X: 69, Y: 15}
+		go monstroLoop(monstro, &jogo, canalMonstro, done)
 
-	// Desenha o estado inicial do jogo
-	interfaceDesenharJogo(&jogo, armadilhas, moeda)
+		//cria as armadilhas
+		armadilhas := []*Armadilha{
+			{X: 6, Y: 14, Ativa: true, ID: 1},
+			{X: 10, Y: 7, Ativa: true, ID: 1},
+			{X: 20, Y: 5, Ativa: true, ID: 1},
+			{X: 30, Y: 10, Ativa: true, ID: 1},
+			{X: 40, Y: 15, Ativa: true, ID: 1},
+			{X: 38, Y: 5, Ativa: true, ID: 1},
+			{X: 60, Y: 8, Ativa: true, ID: 1},
+			{X: 25, Y: 18, Ativa: true, ID: 1},
+			{X: 11, Y: 19, Ativa: true, ID: 1},
+			{X: 35, Y: 25, Ativa: true, ID: 1},
+			{X: 51, Y: 4, Ativa: true, ID: 1},
+			{X: 69, Y: 16, Ativa: true, ID: 1},
+			{X: 46, Y: 11, Ativa: true, ID: 1},
+			{X: 51, Y: 25, Ativa: true, ID: 1},
+			{X: 3, Y: 3, Ativa: true, ID: 1},
+			{X: 13, Y: 28, Ativa: true, ID: 1},
+			{X: 45, Y: 20, Ativa: true, ID: 1},
+			{X: 65, Y: 23, Ativa: true, ID: 1},
+			{X: 74, Y: 26, Ativa: true, ID: 1},
+			{X: 72, Y: 10, Ativa: true, ID: 10},
+		}
+		for _, a := range armadilhas {
+			go armadilhaLoop(a, &jogo, canalArmadilha, done)
+		}
 
-	//nova logica de jogo
-	rodando := true
-	for rodando {
-		select {
-		case msg := <-canalMonstro:
-			jogo.MonstroX = msg.X
-			jogo.MonstroY = msg.Y
-			if msg.Encostou {
-				jogo.StatusMsg = "O MONSTRO TE PEGOU, VOCE MORREU"
+		moeda := &Moeda{X: 6, Y: 10}
+		go moedaLoop(moeda, &jogo, canalMoeda, done)
+
+		// Desenha o estado inicial do jogo
+		interfaceDesenharJogo(&jogo, armadilhas, moeda)
+
+		//nova logica de jogo
+		rodando := true
+		for rodando {
+			select {
+			case msg := <-canalMonstro:
+				jogo.MonstroX = msg.X
+				jogo.MonstroY = msg.Y
+				if msg.Encostou {
+					jogo.StatusMsg = "O MONSTRO TE PEGOU, VOCE MORREU"
+					interfaceDesenharJogo(&jogo, armadilhas, moeda)
+					time.Sleep(2 * time.Second)
+					rodando = false
+				}
+			case <-canalArmadilha:
+				jogo.StatusMsg = "CAIU EM UMA ARMADILHA, VOCE MORREU"
 				interfaceDesenharJogo(&jogo, armadilhas, moeda)
 				time.Sleep(2 * time.Second)
 				rodando = false
+			case novaMoeda := <-canalMoeda:
+				moeda.X = novaMoeda.X
+				moeda.Y = novaMoeda.Y
+				jogo.Pontos++
+			case <-time.After(50 * time.Millisecond):
+				//para não travar o loop
 			}
-		case <-canalArmadilha:
-			jogo.StatusMsg = "CAIU EM UMA ARMADILHA, VOCE MORREU"
-			interfaceDesenharJogo(&jogo, armadilhas, moeda)
-			time.Sleep(2 * time.Second)
-			rodando = false
-		case novaMoeda := <-canalMoeda:
-			moeda.X = novaMoeda.X
-			moeda.Y = novaMoeda.Y
-			jogo.Pontos++
-		case <-time.After(50 * time.Millisecond):
-			//para não travar o loop
-		}
 
-		evento := interfaceLerEventoTeclado()
-		if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
-			rodando = false
+			evento := interfaceLerEventoTeclado()
+			if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
+				return
+			}
+			interfaceDesenharJogo(&jogo, armadilhas, moeda)
 		}
-		interfaceDesenharJogo(&jogo, armadilhas, moeda)
+		close(done)
 	}
 }
