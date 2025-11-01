@@ -47,22 +47,22 @@ func interfaceFinalizar() {
 
 // Lê um evento do teclado e o traduz para um EventoTeclado
 func interfaceLerEventoTeclado(canal chan EventoTeclado) {
-    for {
-        ev := termbox.PollEvent()
-        if ev.Type != termbox.EventKey {
-            continue
-        }
-        
-        var evento EventoTeclado
-        if ev.Key == termbox.KeyEsc {
-            evento = EventoTeclado{Tipo: "sair"}
-        } else if ev.Ch == 'e' {
-            evento = EventoTeclado{Tipo: "interagir"}
-        } else {
-            evento = EventoTeclado{Tipo: "mover", Tecla: ev.Ch}
-        }
-        canal <- evento
-    }
+	for {
+		ev := termbox.PollEvent()
+		if ev.Type != termbox.EventKey {
+			continue
+		}
+
+		var evento EventoTeclado
+		if ev.Key == termbox.KeyEsc {
+			evento = EventoTeclado{Tipo: "sair"}
+		} else if ev.Ch == 'e' {
+			evento = EventoTeclado{Tipo: "interagir"}
+		} else {
+			evento = EventoTeclado{Tipo: "mover", Tecla: ev.Ch}
+		}
+		canal <- evento
+	}
 }
 
 // Renderiza todo o estado atual do jogo na tela
@@ -91,6 +91,18 @@ func interfaceDesenharJogo(jogo *Jogo, armadilhas []*Armadilha, moeda *Moeda) {
 
 	// Desenha o personagem sobre o mapa
 	interfaceDesenharElemento(jogo.PosX, jogo.PosY, Personagem)
+
+	// TODO Member B: desenhar outros jogadores reportados pelo servidor
+	// - `jogo.OtherPlayers` deve ser preenchido pela goroutine de polling que chama rpcClient.GetState()
+	// - Evite desenhar o jogador local novamente: compare PlayerInfo.ID com o ClientID local
+	//   (é preciso que o ClientID local esteja disponível para a comparação; pode ser
+	//    armazenado em uma variável global `LocalClientID` ou passado para a função).
+	// Exemplo comentado (não ativar sem preparar ClientID/global):
+	// for _, p := range jogo.OtherPlayers {
+	//     if p.ID == LocalClientID { continue }
+	//     // desenhar um símbolo simples para outros jogadores, por exemplo '☺' com cor diferente
+	//     interfaceDesenharElemento(p.X, p.Y, Elemento{simbolo: '☺', cor: CorAmarelo, corFundo: CorPadrao, tangivel: true})
+	// }
 
 	// Desenha a barra de status
 	interfaceDesenharBarraDeStatus(jogo)

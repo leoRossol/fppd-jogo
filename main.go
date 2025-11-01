@@ -7,6 +7,29 @@ import (
 	"time"
 )
 
+// INSTRUÇÕES DE INTEGRAÇÃO (Member B)
+// --------------------------------------------------
+// Este arquivo contém o loop principal do cliente. Para integrar o modo multiplayer
+// via RPC, faça as seguintes alterações (comentadas aqui para orientar):
+// 1) Gerar e persistir um ClientID único no início do programa (ex: gravar em `.clientid`).
+// 2) Instanciar o RPC client: rpcClient := NewRPCClient(":12345", clientID)
+// 3) Chamar rpcClient.SendCommand("REGISTER", map[string]interface{}{"name": "playerX"})
+//    logo após carregar o mapa e criar o estado `jogo`.
+// 4) Iniciar uma goroutine de polling que periodicamente chama rpcClient.GetState()
+//    e atualiza `jogo.OtherPlayers` com o resultado. Intervalo recomendado: 200-500ms.
+//    Exemplo (pseudocódigo):
+//      go func() {
+//          for {
+//              state, err := rpcClient.GetState()
+//              if err == nil { jogo.OtherPlayers = state.Players }
+//              time.Sleep(300 * time.Millisecond)
+//          }
+//      }()
+// 5) Ao processar eventos de teclado, garantir que `personagemExecutarAcao` chame
+//    o rpcClient.SendCommand("UPDATE_POS", payload) logo após mover localmente.
+// 6) Certificar-se de que todos os logs de RPC sejam visíveis no terminal para depuração.
+// --------------------------------------------------
+
 func main() {
 	// Inicializa a interface (termbox)
 	interfaceIniciar()
@@ -85,11 +108,11 @@ func main() {
 					jogo.StatusMsg = "O MONSTRO TE PEGOU, VOCE MORREU"
 					interfaceDesenharJogo(&jogo, armadilhas, moeda)
 					time.Sleep(2 * time.Second)
-					
+
 					// Exibe quantas moedas foram coletadas
 					jogo.StatusMsg = "GAME OVER! Você coletou " + fmt.Sprintf("%d", jogo.Pontos) + " moedas antes de morrer. Pressione qualquer tecla para continuar..."
 					interfaceDesenharJogo(&jogo, armadilhas, moeda)
-					
+
 					// Espera o jogador pressionar uma tecla para continuar
 					<-canalTeclado
 					rodando = false
@@ -98,11 +121,11 @@ func main() {
 				jogo.StatusMsg = "CAIU EM UMA ARMADILHA, VOCE MORREU"
 				interfaceDesenharJogo(&jogo, armadilhas, moeda)
 				time.Sleep(2 * time.Second)
-				
+
 				// Exibe quantas moedas foram coletadas
 				jogo.StatusMsg = "GAME OVER! Você coletou " + fmt.Sprintf("%d", jogo.Pontos) + " moedas antes de morrer. Pressione qualquer tecla para continuar..."
 				interfaceDesenharJogo(&jogo, armadilhas, moeda)
-				
+
 				// Espera o jogador pressionar uma tecla para continuar
 				<-canalTeclado
 				rodando = false
