@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/rpc"
 	"sync"
 	"time"
@@ -98,9 +97,9 @@ func (r *RPCClient) SendCommand(cmd string, payload map[string]interface{}) (Com
 	r.mu.Lock()
 	r.Seq++
 	seq := r.Seq
-	args := CommandArgs{ClientID: r.ClientID, Seq: seq, Cmd: cmd, Payload: payload}
 	r.mu.Unlock()
 
+	args := CommandArgs{ClientID: r.ClientID, Seq: seq, Cmd: cmd, Payload: payload}
 	var reply CommandReply
 	// conectar se necessário
 	if err := r.connect(); err != nil {
@@ -110,13 +109,13 @@ func (r *RPCClient) SendCommand(cmd string, payload map[string]interface{}) (Com
 	// retries com backoff; como usamos seq, reexecução é tolerante (server detecta duplicados)
 	backoff := 100 * time.Millisecond
 	for i := 0; i < 5; i++ {
-		fmt.Printf("[CLIENT] Sending SendCommand to %s seq=%d cmd=%s\n", r.addr, seq, cmd)
+		dbg.Printf("[CLIENT] Sending SendCommand to %s seq=%d cmd=%s\n", r.addr, seq, cmd)
 		callErr := r.client.Call("GameServer.SendCommand", &args, &reply)
 		if callErr == nil {
-			fmt.Printf("[CLIENT] Got reply for seq=%d: %+v\n", seq, reply)
+			dbg.Printf("[CLIENT] Got reply for seq=%d: %+v\n", seq, reply)
 			return reply, nil
 		}
-		fmt.Printf("[CLIENT] SendCommand error: %v - retrying...\n", callErr)
+		dbg.Printf("[CLIENT] SendCommand error: %v - retrying...\n", callErr)
 		time.Sleep(backoff)
 		backoff *= 2
 		// reconectar antes da próxima tentativa
@@ -125,7 +124,7 @@ func (r *RPCClient) SendCommand(cmd string, payload map[string]interface{}) (Com
 			return reply, err
 		}
 	}
-	return reply, fmt.Errorf("SendCommand failed after retries")
+	return reply, dbg.Output(1, "SendCommand failed after retries")
 }
 
 // GetState solicita o estado atual do servidor (polling)
@@ -138,13 +137,13 @@ func (r *RPCClient) GetState() (StateReply, error) {
 	args := ClientIDArgs{ClientID: r.ClientID, Now: time.Now()}
 	backoff := 100 * time.Millisecond
 	for i := 0; i < 5; i++ {
-		fmt.Printf("[CLIENT] Requesting GetState from %s\n", r.addr)
+		dbg.Printf("[CLIENT] Requesting GetState from %s\n", r.addr)
 		callErr := r.client.Call("GameServer.GetState", &args, &reply)
 		if callErr == nil {
-			fmt.Printf("[CLIENT] Received state with %d players\n", len(reply.Players))
+			dbg.Printf("[CLIENT] Received state with %d players\n", len(reply.Players))
 			return reply, nil
 		}
-		fmt.Printf("[CLIENT] GetState error: %v - retrying...\n", callErr)
+		dbg.Printf("[CLIENT] GetState error: %v - retrying...\n", callErr)
 		time.Sleep(backoff)
 		backoff *= 2
 		r.client = nil
@@ -152,5 +151,5 @@ func (r *RPCClient) GetState() (StateReply, error) {
 			return reply, err
 		}
 	}
-	return reply, fmt.Errorf("GetState failed after retries")
+	return reply, dbg.Output(2, "GetState failed after retries")
 }

@@ -1,7 +1,11 @@
+//go:build server
+
+//build server
+
 package main
 
 import (
-	"flag"      
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -17,10 +21,10 @@ import (
 // - Sistema de deduplicação de comandos (exactly-once)
 // - Limpeza automática de dados antigos
 type GameServer struct {
-	mu        sync.Mutex // Protege acesso concorrente aos maps
-	players   map[string]PlayerInfo // Mapa de jogadores ativos indexado por ClientID
+	mu        sync.Mutex                        // Protege acesso concorrente aos maps
+	players   map[string]PlayerInfo             // Mapa de jogadores ativos indexado por ClientID
 	processed map[string]map[int64]CommandReply // Cache de comandos processados para deduplicação
-	
+
 	// Controle de TTL (Time To Live)
 	processedTimestamps map[string]map[int64]time.Time // Registra quando cada comando foi processado
 	config              struct {
@@ -32,8 +36,8 @@ type GameServer struct {
 
 func NewGameServer() *GameServer {
 	s := &GameServer{
-		players:   make(map[string]PlayerInfo),
-		processed: make(map[string]map[int64]CommandReply),
+		players:             make(map[string]PlayerInfo),
+		processed:           make(map[string]map[int64]CommandReply),
 		processedTimestamps: make(map[string]map[int64]time.Time),
 	}
 
@@ -67,7 +71,7 @@ func (s *GameServer) SendCommand(args *CommandArgs, reply *CommandReply) error {
 		return nil
 	}
 
-	// Implementação simples dos comandos esperados. 
+	// Implementação simples dos comandos esperados.
 	var cr CommandReply
 	cr.Seq = args.Seq
 

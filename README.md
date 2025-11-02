@@ -33,6 +33,36 @@ go build -tags server -o gameserver.exe server.go rpc_types.go
 .\gameserver.exe
 ```
 
+### Rodando o cliente
+
+Variáveis de ambiente (opcionais):
+- `SERVER_ADDR` endereço do servidor (padrão: 127.0.0.1:12345)
+- `CLIENT_ID` força um ID de cliente específico (senão usa/persiste `.clientid`)
+- `CLIENT_ID_FILE` caminho do arquivo para persistir o ID (padrão: `.clientid`)
+- `POLL_MS` intervalo de polling do estado em milissegundos (padrão: 300)
+- `DEBUG_PANEL` se `1`, exibe um painel de logs no rodapé da tela
+- `CLIENT_LOG` caminho de arquivo para logs do cliente (não polui a tela)
+- `DEBUG` se `1`, envia logs para stderr (pode sobrepor a tela; use só para depuração rápida)
+
+Exemplo (dois clientes no mesmo diretório):
+```bash
+# Terminal 1 (servidor)
+go run -tags server ./server.go ./rpc_types.go
+
+# Terminal 2 (cliente A)
+export SERVER_ADDR=127.0.0.1:12345
+export CLIENT_ID=A1
+export DEBUG_PANEL=1        # painel de logs no rodapé (opcional)
+# export CLIENT_LOG=clientA.log  # alternativa: logs em arquivo
+go run .
+
+# Terminal 3 (cliente B)
+export SERVER_ADDR=127.0.0.1:12345
+export CLIENT_ID=B2
+export DEBUG_PANEL=1
+go run .
+```
+
 ## Como compilar
 
 1. Instale o Go e clone este repositório.
