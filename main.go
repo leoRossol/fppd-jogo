@@ -115,6 +115,37 @@ func main() {
 			panic(err)
 		}
 
+		// Integração RPC (Member B) — gerar/persistir ClientID, registrar e iniciar polling
+		rpcAddr := os.Getenv("RPC_ADDR")
+		if rpcAddr == "" {
+			rpcAddr = "127.0.0.1:12345"
+		}
+		clientIDFile := os.Getenv("CLIENTID_FILE")
+		if clientIDFile == "" {
+			clientIDFile = ".clientid"
+		}
+		clientID, err := LoadOrCreateClientID(clientIDFile)
+		if err != nil {
+			fmt.Printf("[CLIENT] erro ao obter ClientID: %v\n", err)
+			clientID = "unknown-client"
+		}
+		rpcClient := NewRPCClient(rpcAddr, clientID)
+		// Tenta registrar (não bloqueante)
+		go func() {
+			_, _ = rpcClient.SendCommand("REGISTER", map[string]interface{}{"name": clientID})
+		}()
+
+		// Polling para obter estado remoto e popular jogo.OtherPlayers
+		go func() {
+			for {
+				state, err := rpcClient.GetState()
+				if err == nil {
+					jogo.OtherPlayers = state.Players
+				}
+				time.Sleep(300 * time.Millisecond)
+			}
+		}()
+
 		jogo.Pontos = -1
 
 		// === B) registrar e publicar posicao inicial ===

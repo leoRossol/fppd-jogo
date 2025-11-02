@@ -1,0 +1,24 @@
+# command-line-arguments
+./server.go:37:23: undefined: PlayerInfo
+./server.go:38:33: undefined: CommandReply
+./server.go:45:30: undefined: PlayerInfo
+./server.go:46:40: undefined: CommandReply
+./server.go:53:40: undefined: CommandArgs
+./server.go:53:60: undefined: CommandReply
+./server.go:61:47: undefined: CommandReply
+./server.go:72:9: undefined: CommandReply
+./server.go:114:37: undefined: ClientIDArgs
+./server.go:114:58: undefined: StateReply
+./server.go:72:9: too many errors
+# command-line-arguments
+./server.go:37:23: undefined: PlayerInfo
+./server.go:38:33: undefined: CommandReply
+./server.go:45:30: undefined: PlayerInfo
+./server.go:46:40: undefined: CommandReply
+./server.go:53:40: undefined: CommandArgs
+./server.go:53:60: undefined: CommandReply
+./server.go:61:47: undefined: CommandReply
+./server.go:72:9: undefined: CommandReply
+./server.go:114:37: undefined: ClientIDArgs
+./server.go:114:58: undefined: StateReply
+./server.go:72:9: too many errors

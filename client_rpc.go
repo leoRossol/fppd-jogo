@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"io/ioutil"
 	"net/rpc"
 	"sync"
 	"time"
@@ -69,6 +73,36 @@ type RPCClient struct {
 
 func NewRPCClient(addr, clientID string) *RPCClient {
 	return &RPCClient{addr: addr, ClientID: clientID}
+}
+
+// GenerateRandomID cria um identificador aleatório hex (16 bytes -> 32 chars)
+func GenerateRandomID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// LoadOrCreateClientID lê o ClientID do ficheiro `path` ou cria um novo se não existir.
+// O ficheiro é criado com permissão 0600.
+func LoadOrCreateClientID(path string) (string, error) {
+	if path == "" {
+		path = ".clientid"
+	}
+	if data, err := ioutil.ReadFile(path); err == nil {
+		id := string(data)
+		return id, nil
+	}
+	// criar novo
+	id, err := GenerateRandomID()
+	if err != nil {
+		return "", err
+	}
+	if err := ioutil.WriteFile(path, []byte(id), 0600); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 func (r *RPCClient) connect() error {
