@@ -20,6 +20,19 @@ Este projeto é um pequeno jogo desenvolvido em Go que roda no terminal usando a
 | E     | Interagir         |
 | ESC   | Sair do jogo      |
 
+## Como rodar o servidor
+
+1. Compile o server.go junto com o rpc_types.go
+
+```bash
+go build -tags server -o gameserver.exe server.go rpc_types.go
+```
+
+2. Rode 
+```bash
+.\gameserver.exe
+```
+
 ## Como compilar
 
 1. Instale o Go e clone este repositório.
