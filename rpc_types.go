@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"encoding/gob"
+	"time"
+)
 
 // rpc_types.go
 // ----------------
@@ -37,13 +40,25 @@ type StateReply struct {
 	ServerTime int64
 }
 
+// Payloads tipados para comunicação RPC
+type RegisterPayload struct {
+	Name string
+	X, Y int
+}
+
+type UpdatePosPayload struct {
+	X, Y  int
+	Lives int
+}
+
 // CommandArgs representa um comando enviado pelo cliente ao servidor
+// Payload agora é interface{} para suportar structs tipados. Os tipos
+// precisam ser registrados com gob para permitir serialização via net/rpc.
 type CommandArgs struct {
 	ClientID string
 	Seq      int64
 	Cmd      string
-	// Payload pode ser expandido para tipos específicos; usamos map[string]interface{} para flexibilidade
-	Payload map[string]interface{}
+	Payload  interface{}
 }
 
 type CommandReply struct {
@@ -56,5 +71,41 @@ type ClientIDArgs struct {
 	ClientID string
 	Now      time.Time
 }
+
+func init() {
+	// Registrar os tipos usados para que encoding/gob consiga codificar/decodificar
+	gob.Register(RegisterPayload{})
+	gob.Register(UpdatePosPayload{})
+}
+
+// Validação simples para UpdatePosPayload
+// Retorna nil se tudo OK, ou um erro descrevendo o problema.
+func ValidateUpdatePos(p UpdatePosPayload) error {
+	if p.X < 0 || p.Y < 0 {
+		return &ValidationError{"coordinates must be non-negative"}
+	}
+	if p.Lives < 0 {
+		return &ValidationError{"lives must be non-negative"}
+	}
+	return nil
+}
+
+// Validação simples para RegisterPayload
+func ValidateRegister(r RegisterPayload) error {
+	if r.Name == "" {
+		return &ValidationError{"name required"}
+	}
+	if r.X < 0 || r.Y < 0 {
+		return &ValidationError{"coordinates must be non-negative"}
+	}
+	return nil
+}
+
+// ValidationError é usado nas funções de validação para testes e mensagens claras.
+type ValidationError struct{
+	Msg string
+}
+
+func (e *ValidationError) Error() string { return e.Msg }
 
 // FIM rpc_types.go
