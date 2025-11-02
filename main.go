@@ -5,6 +5,12 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	// === B) imports
+	"crypto/rand"
+	"encoding/hex"
+	"strconv"
+	"strings"
 )
 
 // INSTRUÇÕES DE INTEGRAÇÃO (Member B)
@@ -30,6 +36,32 @@ import (
 // 6) Certificar-se de que todos os logs de RPC sejam visíveis no terminal para depuração.
 // --------------------------------------------------
 
+// === B) variaveis globais para acesso em outros arquivos ===
+var (
+	rpcClient     *RPCClient
+	LocalClientID string
+)
+
+// === B) util para gerar/persistir clientID ===
+func loadOrCreateClientID(path string) (string, error) {
+	if b, err := os.ReadFile(path); err == nil {
+		id := strings.TrimSpace(string(b))
+		if id != "" {
+			return id, nil
+		}
+	}
+	// gera novo
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	id := hex.EncodeToString(buf)
+	if err := os.WriteFile(path, []byte(id), 0600); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 func main() {
 	// Inicializa a interface (termbox)
 	interfaceIniciar()
@@ -39,6 +71,34 @@ func main() {
 	mapaFile := "mapa.txt"
 	if len(os.Args) > 1 {
 		mapaFile = os.Args[1]
+	}
+
+	// === B)  ===
+	var err error
+	cidFile := os.Getenv("CLIENT_ID_FILE")
+	if cidFile == "" {
+		cidFile = ".clientid"
+	}
+	if cid := os.Getenv("CLIENT_ID"); cid != "" {
+		LocalClientID = cid
+	} else {
+		LocalClientID, err = loadOrCreateClientID(cidFile)
+	}
+	if err != nil {
+		dbg.Printf("[CLIENT] erro ao ler/criar .clientid: %v", err)
+	}
+
+	serverAddr := os.Getenv("SERVER_ADDR")
+	if serverAddr == "" {
+		serverAddr = "127.0.0.1:12345"
+	}
+	rpcClient = NewRPCClient(serverAddr, LocalClientID)
+
+	pollMS := 300
+	if v := os.Getenv("POLL_MS"); v != "" {
+		if n, convErr := strconv.Atoi(v); convErr == nil && n >= 50 {
+			pollMS = n
+		}
 	}
 
 	for {
@@ -56,6 +116,38 @@ func main() {
 		}
 
 		jogo.Pontos = -1
+
+		// === B) registrar e publicar posicao inicial ===
+		if rpcClient != nil {
+			payload := map[string]interface{}{"x": jogo.PosX, "y": jogo.PosY, "lives": jogo.Pontos}
+			go rpcClient.SendCommand("REGISTER", payload)
+			go rpcClient.SendCommand("UPDATE_POS", payload)
+		}
+		// polling getstate -> envia para stateChan (evitar datarace)
+		stateChan := make(chan StateReply, 1)
+		go func(intervalMS int, stop <-chan struct{}) {
+			ticker := time.NewTicker(time.Duration(intervalMS) * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-ticker.C:
+					if rpcClient == nil {
+						continue
+					}
+					st, err := rpcClient.GetState()
+					if err != nil {
+						dbg.Printf("[CLIENT] polling erro: %v\n", err)
+						continue
+					}
+					select {
+					case stateChan <- st:
+					default:
+					}
+				}
+			}
+		}(pollMS, done)
 
 		// Inicia a goroutine para ler eventos do teclado
 		go interfaceLerEventoTeclado(canalTeclado)
@@ -142,6 +234,11 @@ func main() {
 				if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
 					return
 				}
+			// === B) consumo do polling
+			case st := <-stateChan:
+				jogo.OtherPlayers = st.Players
+				jogo.StatusMsg = "Jogadores Online: " + strconv.Itoa(len(st.Players))
+
 			case <-time.After(50 * time.Millisecond):
 				// para atualizar a tela periodicamente
 				interfaceDesenharJogo(&jogo, armadilhas, moeda)

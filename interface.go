@@ -92,6 +92,16 @@ func interfaceDesenharJogo(jogo *Jogo, armadilhas []*Armadilha, moeda *Moeda) {
 	// Desenha o personagem sobre o mapa
 	interfaceDesenharElemento(jogo.PosX, jogo.PosY, Personagem)
 
+	// === B) desenhar outros joadores
+	if len(jogo.OtherPlayers) > 0 {
+		remoteElem := Elemento{simbolo: '☺', cor: CorAmarelo, corFundo: CorPadrao, tangivel: true}
+		for _, p := range jogo.OtherPlayers {
+			if p.ID == LocalClientID {
+				continue
+			}
+			interfaceDesenharElemento(p.X, p.Y, remoteElem)
+		}
+	}
 	// TODO Member B: desenhar outros jogadores reportados pelo servidor
 	// - `jogo.OtherPlayers` deve ser preenchido pela goroutine de polling que chama rpcClient.GetState()
 	// - Evite desenhar o jogador local novamente: compare PlayerInfo.ID com o ClientID local
@@ -109,6 +119,11 @@ func interfaceDesenharJogo(jogo *Jogo, armadilhas []*Armadilha, moeda *Moeda) {
 
 	// Força a atualização do terminal
 	interfaceAtualizarTela()
+
+	// desenha painel de debug ao lado
+	interfaceDesenharDebugPanel(jogo)
+
+	termbox.Flush()
 }
 
 // Limpa a tela do terminal
@@ -139,4 +154,66 @@ func interfaceDesenharBarraDeStatus(jogo *Jogo) {
 	for i, c := range msg {
 		termbox.SetCell(i, len(jogo.Mapa)+3, c, CorTexto, CorPadrao)
 	}
+}
+
+func interfaceDesenharDebugPanel(jogo *Jogo) {
+	if !debugPanelEnabled {
+		return
+	}
+	debugPanelDrain()
+
+	w, h := termbox.Size()
+
+	mapH := len(jogo.Mapa)
+
+	// A barra de status usa duas linhas (y=mapH+1 e y=mapH+3).
+	top := mapH + 5
+	if top >= h {
+		return // sem espaço para painel
+	}
+
+	bg := termbox.ColorBlack
+	fg := termbox.ColorYellow
+
+	// Limpa a região do painel (toda a largura, do "top" até o fim)
+	for y := top; y < h; y++ {
+		for x := 0; x < w; x++ {
+			termbox.SetCell(x, y, ' ', fg, bg)
+		}
+	}
+
+	// título
+	tbPrint(1, top, fg|termbox.AttrBold, bg, "Logs (DEBUG_PANEL)")
+
+	// últimas linhas, de baixo para cima
+	maxLines := h - (top + 1)
+	if maxLines <= 0 {
+		return
+	}
+	lines := getDebugLines(maxLines)
+
+	y := top + 1
+	start := 0
+	if len(lines) > maxLines {
+		start = len(lines) - maxLines
+	}
+	for i := start; i < len(lines) && y < h; i++ {
+		line := truncateToWidth(lines[i], w-2)
+		tbPrint(1, y, termbox.ColorWhite, bg, line)
+		y++
+	}
+}
+
+// helpers simples para escrever texto e truncar
+func tbPrint(x, y int, fg, bg termbox.Attribute, msg string) {
+	for i, ch := range msg {
+		termbox.SetCell(x+i, y, ch, fg, bg)
+	}
+}
+
+func truncateToWidth(s string, w int) string {
+	if w <= 0 || len(s) <= w {
+		return s
+	}
+	return s[:w]
 }

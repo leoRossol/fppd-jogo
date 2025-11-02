@@ -35,6 +35,12 @@ func personagemMover(tecla rune, jogo *Jogo) {
 	if jogoPodeMoverPara(jogo, nx, ny) {
 		jogoMoverElemento(jogo, jogo.PosX, jogo.PosY, dx, dy)
 		jogo.PosX, jogo.PosY = nx, ny
+
+		// === B) reportar posicao ao servidor
+		if rpcClient != nil {
+			payload := map[string]interface{}{"x": jogo.PosX, "y": jogo.PosY, "lives": jogo.Pontos}
+			go rpcClient.SendCommand("UPDATE_POS", payload)
+		}
 	}
 }
 
