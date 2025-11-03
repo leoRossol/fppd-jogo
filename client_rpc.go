@@ -155,7 +155,21 @@ func (r *RPCClient) SendCommand(cmd string, payload interface{}) (CommandReply, 
 	backoff := 100 * time.Millisecond
 	for i := 0; i < 5; i++ {
 		dbg.Printf("[CLIENT] Sending SendCommand to %s seq=%d cmd=%s\n", r.addr, seq, cmd)
-		callErr := r.client.Call("GameServer.SendCommand", &args, &reply)
+		
+		r.mu.Lock()
+		client := r.client
+		r.mu.Unlock()
+		
+		if client == nil {
+			if err := r.connect(); err != nil {
+				return reply, err
+			}
+			r.mu.Lock()
+			client = r.client
+			r.mu.Unlock()
+		}
+		
+		callErr := client.Call("GameServer.SendCommand", &args, &reply)
 		if callErr == nil {
 			dbg.Printf("[CLIENT] Got reply for seq=%d: %+v\n", seq, reply)
 			return reply, nil
@@ -164,7 +178,9 @@ func (r *RPCClient) SendCommand(cmd string, payload interface{}) (CommandReply, 
 		time.Sleep(backoff)
 		backoff *= 2
 		// reconectar antes da próxima tentativa
+		r.mu.Lock()
 		r.client = nil
+		r.mu.Unlock()
 		if err := r.connect(); err != nil {
 			return reply, err
 		}
@@ -183,7 +199,21 @@ func (r *RPCClient) GetState() (StateReply, error) {
 	backoff := 100 * time.Millisecond
 	for i := 0; i < 5; i++ {
 		dbg.Printf("[CLIENT] Requesting GetState from %s\n", r.addr)
-		callErr := r.client.Call("GameServer.GetState", &args, &reply)
+		
+		r.mu.Lock()
+		client := r.client
+		r.mu.Unlock()
+		
+		if client == nil {
+			if err := r.connect(); err != nil {
+				return reply, err
+			}
+			r.mu.Lock()
+			client = r.client
+			r.mu.Unlock()
+		}
+		
+		callErr := client.Call("GameServer.GetState", &args, &reply)
 		if callErr == nil {
 			dbg.Printf("[CLIENT] Received state with %d players\n", len(reply.Players))
 			return reply, nil
@@ -191,7 +221,9 @@ func (r *RPCClient) GetState() (StateReply, error) {
 		dbg.Printf("[CLIENT] GetState error: %v - retrying...\n", callErr)
 		time.Sleep(backoff)
 		backoff *= 2
+		r.mu.Lock()
 		r.client = nil
+		r.mu.Unlock()
 		if err := r.connect(); err != nil {
 			return reply, err
 		}

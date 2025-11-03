@@ -76,12 +76,17 @@ func main() {
 		mapaFile = os.Args[1]
 	}
 
-	// === B)  ===
-	var err error
-	cidFile := os.Getenv("CLIENT_ID_FILE")
+	// === B) Configurar RPC client ===
+	// Suporta CLIENTID_FILE ou CLIENT_ID_FILE (fallback para compatibilidade)
+	cidFile := os.Getenv("CLIENTID_FILE")
+	if cidFile == "" {
+		cidFile = os.Getenv("CLIENT_ID_FILE")
+	}
 	if cidFile == "" {
 		cidFile = ".clientid"
 	}
+	
+	var err error
 	if cid := os.Getenv("CLIENT_ID"); cid != "" {
 		LocalClientID = cid
 	} else {
@@ -91,10 +96,15 @@ func main() {
 		dbg.Printf("[CLIENT] erro ao ler/criar .clientid: %v", err)
 	}
 
-	serverAddr := os.Getenv("SERVER_ADDR")
+	// Suporta RPC_ADDR ou SERVER_ADDR (fallback)
+	serverAddr := os.Getenv("RPC_ADDR")
+	if serverAddr == "" {
+		serverAddr = os.Getenv("SERVER_ADDR")
+	}
 	if serverAddr == "" {
 		serverAddr = "127.0.0.1:12345"
 	}
+	
 	rpcClient = NewRPCClient(serverAddr, LocalClientID)
 
 	pollMS := 300
@@ -118,43 +128,12 @@ func main() {
 			panic(err)
 		}
 
-		// Integração RPC (Member B) — gerar/persistir ClientID, registrar e iniciar polling
-		rpcAddr := os.Getenv("RPC_ADDR")
-		if rpcAddr == "" {
-			rpcAddr = "127.0.0.1:12345"
-		}
-		clientIDFile := os.Getenv("CLIENTID_FILE")
-		if clientIDFile == "" {
-			clientIDFile = ".clientid"
-		}
-		clientID, err := LoadOrCreateClientID(clientIDFile)
-		if err != nil {
-			fmt.Printf("[CLIENT] erro ao obter ClientID: %v\n", err)
-			clientID = "unknown-client"
-		}
-		rpcClient = NewRPCClient(rpcAddr, clientID)
-		// Tenta registrar (não bloqueante)
-		go func() {
-			_, _ = rpcClient.SendCommand("REGISTER", map[string]interface{}{"name": clientID})
-		}()
-
-		// Polling para obter estado remoto e popular jogo.OtherPlayers
-		go func() {
-			for {
-				state, err := rpcClient.GetState()
-				if err == nil {
-					jogo.OtherPlayers = state.Players
-				}
-				time.Sleep(300 * time.Millisecond)
-			}
-		}()
-
 		jogo.Pontos = -1
 
 		// === B) registrar e publicar posicao inicial ===
 		if rpcClient != nil {
 			// usar tipos tipados para payloads RPC
-			reg := RegisterPayload{Name: clientID, X: jogo.PosX, Y: jogo.PosY}
+			reg := RegisterPayload{Name: LocalClientID, X: jogo.PosX, Y: jogo.PosY}
 			go func() { _, _ = rpcClient.SendCommand("REGISTER", reg) }()
 
 			up := UpdatePosPayload{X: jogo.PosX, Y: jogo.PosY, Lives: jogo.Pontos}
