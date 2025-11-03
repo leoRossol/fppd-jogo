@@ -1,11 +1,15 @@
+//go:build !server
+// +build !server
+
 package main
 
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"net/rpc"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -72,7 +76,10 @@ type RPCClient struct {
 }
 
 func NewRPCClient(addr, clientID string) *RPCClient {
-	return &RPCClient{addr: addr, ClientID: clientID}
+	r := &RPCClient{addr: addr, ClientID: clientID}
+	// tentar carregar seq previamente persistido
+	r.loadSeq()
+	return r
 }
 
 // GenerateRandomID cria um identificador aleatório hex (16 bytes -> 32 chars)
@@ -126,11 +133,15 @@ func (r *RPCClient) connect() error {
 }
 
 // SendCommand envia um comando para o servidor com retries; garante que o mesmo seq seja transmitido nas retransmissões
-func (r *RPCClient) SendCommand(cmd string, payload map[string]interface{}) (CommandReply, error) {
+func (r *RPCClient) SendCommand(cmd string, payload interface{}) (CommandReply, error) {
 	// prepara args
 	r.mu.Lock()
 	r.Seq++
 	seq := r.Seq
+	// persistir seq imediatamente para sobreviver a crashes
+	if err := r.saveSeq(seq); err != nil {
+		dbg.Printf("[CLIENT] aviso: não foi possível salvar seq %d: %v\n", seq, err)
+	}
 	r.mu.Unlock()
 
 	args := CommandArgs{ClientID: r.ClientID, Seq: seq, Cmd: cmd, Payload: payload}
@@ -186,4 +197,31 @@ func (r *RPCClient) GetState() (StateReply, error) {
 		}
 	}
 	return reply, dbg.Output(2, "GetState failed after retries")
+}
+
+// helpers para persistir seq
+func (r *RPCClient) seqFilePath() string {
+	// arquivo simples no cwd; usa ClientID para evitar colisões
+	return "." + r.ClientID + ".seq"
+}
+
+func (r *RPCClient) loadSeq() {
+	path := r.seqFilePath()
+	if data, err := os.ReadFile(path); err == nil {
+		if s, err2 := strconv.ParseInt(string(data), 10, 64); err2 == nil {
+			r.Seq = s
+		}
+	}
+}
+
+func (r *RPCClient) saveSeq(s int64) error {
+	path := r.seqFilePath()
+	// write atomically: write to temp file then rename
+	tmp := path + ".tmp"
+	data := []byte(strconv.FormatInt(s, 10))
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	// On Windows, os.Rename will replace existing file if target exists
+	return os.Rename(tmp, path)
 }

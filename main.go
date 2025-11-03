@@ -1,3 +1,6 @@
+//go:build !server
+// +build !server
+
 // main.go - Loop principal do jogo
 package main
 
@@ -129,7 +132,7 @@ func main() {
 			fmt.Printf("[CLIENT] erro ao obter ClientID: %v\n", err)
 			clientID = "unknown-client"
 		}
-		rpcClient := NewRPCClient(rpcAddr, clientID)
+		rpcClient = NewRPCClient(rpcAddr, clientID)
 		// Tenta registrar (não bloqueante)
 		go func() {
 			_, _ = rpcClient.SendCommand("REGISTER", map[string]interface{}{"name": clientID})
@@ -150,9 +153,12 @@ func main() {
 
 		// === B) registrar e publicar posicao inicial ===
 		if rpcClient != nil {
-			payload := map[string]interface{}{"x": jogo.PosX, "y": jogo.PosY, "lives": jogo.Pontos}
-			go rpcClient.SendCommand("REGISTER", payload)
-			go rpcClient.SendCommand("UPDATE_POS", payload)
+			// usar tipos tipados para payloads RPC
+			reg := RegisterPayload{Name: clientID, X: jogo.PosX, Y: jogo.PosY}
+			go func() { _, _ = rpcClient.SendCommand("REGISTER", reg) }()
+
+			up := UpdatePosPayload{X: jogo.PosX, Y: jogo.PosY, Lives: jogo.Pontos}
+			go func() { _, _ = rpcClient.SendCommand("UPDATE_POS", up) }()
 		}
 		// polling getstate -> envia para stateChan (evitar datarace)
 		stateChan := make(chan StateReply, 1)

@@ -1,3 +1,7 @@
+//go:build !server
+// +build !server
+
+// debugPanel.go
 package main
 
 import (

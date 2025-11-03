@@ -1,15 +1,8 @@
-//go:build server
-
-//build server
-
 package main
 
 import (
 	"flag"
 	"fmt"
-	"log"
-	"net"
-	"net/rpc"
 	"os"
 	"strconv"
 	"sync"
@@ -71,31 +64,72 @@ func (s *GameServer) SendCommand(args *CommandArgs, reply *CommandReply) error {
 		return nil
 	}
 
-	// Implementação simples dos comandos esperados.
+	// Implementação simples dos comandos esperados. Aceitamos payloads como
+	// structs tipados (ex: UpdatePosPayload) ou como map[string]interface{}.
 	var cr CommandReply
 	cr.Seq = args.Seq
 
 	switch args.Cmd {
 	case "UPDATE_POS":
-		// Atualmente Payload é map[string]interface{}; para maior segurança, considere
-		// trocar por um struct UpdatePosPayload em rpc_types.go e usar esse tipo aqui.
-		x, _ := args.Payload["x"].(int)
-		y, _ := args.Payload["y"].(int)
-		lives, _ := args.Payload["lives"].(int)
+		// Extrair payload de forma segura
+		var x, y, lives int
+		switch p := args.Payload.(type) {
+		case UpdatePosPayload:
+			x = p.X
+			y = p.Y
+			lives = p.Lives
+		case map[string]interface{}:
+			if xi, ok := toInt(p["x"]); ok {
+				x = xi
+			}
+			if yi, ok := toInt(p["y"]); ok {
+				y = yi
+			}
+			if li, ok := toInt(p["lives"]); ok {
+				lives = li
+			}
+		default:
+			// caso não saibamos o tipo, rejeitamos o comando
+			cr.Applied = false
+			cr.Message = "bad-payload"
+			fmt.Printf("[SERVER] %s UPDATE_POS bad payload type %T from %s\n", time.Now().Format(time.RFC3339), args.Payload, args.ClientID)
+			s.processed[args.ClientID][args.Seq] = cr
+			s.processedTimestamps[args.ClientID][args.Seq] = time.Now()
+			*reply = cr
+			return nil
+		}
+
 		pi := PlayerInfo{ID: args.ClientID, X: x, Y: y, Lives: lives, LastSeen: time.Now().Unix()}
 		s.players[args.ClientID] = pi
 		cr.Applied = true
 		cr.Message = "position-updated"
 		fmt.Printf("[SERVER] %s Updated position for %s -> (%d,%d) lives=%d\n", time.Now().Format(time.RFC3339), args.ClientID, x, y, lives)
 	case "REGISTER":
-		// payload pode conter campos extras; registra jogador básico
-		pi := PlayerInfo{ID: args.ClientID, X: 0, Y: 0, Lives: 3, LastSeen: time.Now().Unix()}
+		// payload pode ser RegisterPayload ou map; registramos jogador
+		var px RegisterPayload
+		switch p := args.Payload.(type) {
+		case RegisterPayload:
+			px = p
+		case map[string]interface{}:
+			// extrai nome e optional coords
+			if name, ok := p["name"].(string); ok {
+				px.Name = name
+			}
+			if xi, ok := toInt(p["x"]); ok {
+				px.X = xi
+			}
+			if yi, ok := toInt(p["y"]); ok {
+				px.Y = yi
+			}
+		default:
+			// sem payload tipado, assume valores default
+		}
+		pi := PlayerInfo{ID: args.ClientID, X: px.X, Y: px.Y, Lives: 3, LastSeen: time.Now().Unix()}
 		s.players[args.ClientID] = pi
 		cr.Applied = true
 		cr.Message = "registered"
-		fmt.Printf("[SERVER] %s Registered player %s\n", time.Now().Format(time.RFC3339), args.ClientID)
+		fmt.Printf("[SERVER] %s Registered player %s (name=%s)\n", time.Now().Format(time.RFC3339), args.ClientID, px.Name)
 	case "LOGOUT":
-		// TODO Member A: implementar remoção segura do jogador
 		delete(s.players, args.ClientID)
 		cr.Applied = true
 		cr.Message = "logged-out"
@@ -111,6 +145,41 @@ func (s *GameServer) SendCommand(args *CommandArgs, reply *CommandReply) error {
 	s.processedTimestamps[args.ClientID][args.Seq] = time.Now()
 	*reply = cr
 	return nil
+}
+
+// toInt converte vários tipos numéricos em int, retornando false se não suportado
+func toInt(v interface{}) (int, bool) {
+	if v == nil {
+		return 0, false
+	}
+	switch t := v.(type) {
+	case int:
+		return t, true
+	case int8:
+		return int(t), true
+	case int16:
+		return int(t), true
+	case int32:
+		return int(t), true
+	case int64:
+		return int(t), true
+	case uint:
+		return int(t), true
+	case uint8:
+		return int(t), true
+	case uint16:
+		return int(t), true
+	case uint32:
+		return int(t), true
+	case uint64:
+		return int(t), true
+	case float32:
+		return int(t), true
+	case float64:
+		return int(t), true
+	default:
+		return 0, false
+	}
 }
 
 // GetState retorna lista de jogadores ativos para os clientes
@@ -194,28 +263,4 @@ func (s *GameServer) startCleanupRoutine() {
 			s.mu.Unlock()
 		}
 	}()
-}
-
-func main() {
-	// Inicializa e configura o servidor
-	gs := NewGameServer()
-	gs.parseFlags()
-	rpc.Register(gs)
-
-	// Inicia servidor RPC
-	addr := fmt.Sprintf(":%d", gs.config.port)
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatalf("failed to listen on %s: %v", addr, err)
-	}
-	defer l.Close()
-
-	fmt.Printf("[SERVER] RPC server listening on %s (ttlProcessed=%v, ttlPlayer=%v)\n",
-		addr, gs.config.ttlProcessed, gs.config.ttlPlayer)
-
-	// Inicia limpeza automática em background
-	gs.startCleanupRoutine()
-
-	// Aceita conexões RPC até o servidor ser encerrado
-	rpc.Accept(l)
 }

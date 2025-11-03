@@ -1,3 +1,6 @@
+//go:build !server
+// +build !server
+
 // personagem.go - Funções para movimentação e ações do personagem
 package main
 
@@ -38,8 +41,10 @@ func personagemMover(tecla rune, jogo *Jogo) {
 
 		// === B) reportar posicao ao servidor
 		if rpcClient != nil {
-			payload := map[string]interface{}{"x": jogo.PosX, "y": jogo.PosY, "lives": jogo.Pontos}
-			go rpcClient.SendCommand("UPDATE_POS", payload)
+			up := UpdatePosPayload{X: jogo.PosX, Y: jogo.PosY, Lives: jogo.Pontos}
+			go func() {
+				_, _ = rpcClient.SendCommand("UPDATE_POS", up)
+			}()
 		}
 	}
 }

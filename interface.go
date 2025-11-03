@@ -1,3 +1,6 @@
+//go:build !server
+// +build !server
+
 // interface.go - Interface gráfica do jogo usando termbox
 // O código abaixo implementa a interface gráfica do jogo usando a biblioteca termbox-go.
 // A biblioteca termbox-go é uma biblioteca de interface de terminal que permite desenhar

@@ -1,108 +1,136 @@
-# Jogo de Terminal em Go
+# Jogo de Terminal em Go (single-player + RPC multiplayer)
 
-Este projeto é um pequeno jogo desenvolvido em Go que roda no terminal usando a biblioteca [termbox-go](https://github.com/nsf/termbox-go). O jogador controla um personagem que pode se mover por um mapa carregado de um arquivo de texto.
+Este projeto é um jogo de terminal em Go que agora suporta modo multiplayer via RPC.
+O cliente mantém toda a lógica do jogo e o servidor centraliza o estado dos jogadores (posições, vidas).
 
-## Como funciona
+Principais pontos:
+- Cliente: interface, lógica de movimentação, polling periódico para `GetState` no servidor.
+- Servidor: mantém lista de jogadores e deduplicação exactly-once por ClientID+Seq; não contém lógica de movimentação nem mapa.
 
-- O mapa é carregado de um arquivo `.txt` contendo caracteres que representam diferentes elementos do jogo.
-- O personagem se move com as teclas **W**, **A**, **S**, **D**.
-- Pressione **E** para interagir com o ambiente.
-- Pressione **ESC** para sair do jogo.
+## Controles (single-player / cliente)
 
-### Controles
+| Tecla | Ação |
+|-------|------|
+| W | Mover para cima |
+| A | Mover para esquerda |
+| S | Mover para baixo |
+| D | Mover para direita |
+| E | Interagir |
+| ESC | Sair do jogo |
 
-| Tecla | Ação              |
-|-------|-------------------|
-| W     | Mover para cima   |
-| A     | Mover para esquerda |
-| S     | Mover para baixo  |
-| D     | Mover para direita |
-| E     | Interagir         |
-| ESC   | Sair do jogo      |
+## Como rodar (modo RPC multiplayer)
 
-## Como rodar o servidor
+Esta seção mostra passos organizados para rodar o servidor e o(s) cliente(s) tanto em modo de desenvolvimento (go run) quanto compilando binários.
 
-1. Compile o server.go junto com o rpc_types.go
+Requisitos
+- Go 1.18+ instalado
+- Sistema: instruções abaixo usam PowerShell no Windows; em Bash (Linux/macOS) substitua as declarações de ambiente por `export VAR=valor`.
 
-```bash
-go build -tags server -o gameserver.exe server.go rpc_types.go
+Passo rápido (modo dev)
+- Abra um terminal para o servidor e rode:
+
+```powershell
+# inicia o servidor (usa o main com build tag `server`)
+go run -tags server .
 ```
 
-2. Rode 
-```bash
-.\gameserver.exe
-```
+- Abra outro(s) terminal(is) para os clientes e rode em cada um:
 
-### Rodando o cliente
-
-Variáveis de ambiente (opcionais):
-- `SERVER_ADDR` endereço do servidor (padrão: 127.0.0.1:12345)
-- `CLIENT_ID` força um ID de cliente específico (senão usa/persiste `.clientid`)
-- `CLIENT_ID_FILE` caminho do arquivo para persistir o ID (padrão: `.clientid`)
-- `POLL_MS` intervalo de polling do estado em milissegundos (padrão: 300)
-- `DEBUG_PANEL` se `1`, exibe um painel de logs no rodapé da tela
-- `CLIENT_LOG` caminho de arquivo para logs do cliente (não polui a tela)
-- `DEBUG` se `1`, envia logs para stderr (pode sobrepor a tela; use só para depuração rápida)
-
-Exemplo (dois clientes no mesmo diretório):
-```bash
-# Terminal 1 (servidor)
-go run -tags server ./server.go ./rpc_types.go
-
-# Terminal 2 (cliente A)
-export SERVER_ADDR=127.0.0.1:12345
-export CLIENT_ID=A1
-export DEBUG_PANEL=1        # painel de logs no rodapé (opcional)
-# export CLIENT_LOG=clientA.log  # alternativa: logs em arquivo
-go run .
-
-# Terminal 3 (cliente B)
-export SERVER_ADDR=127.0.0.1:12345
-export CLIENT_ID=B2
-export DEBUG_PANEL=1
+```powershell
+# inicia o cliente (interface + lógica local)
 go run .
 ```
 
-## Como compilar
+Build (gerar binários)
+- Compilar servidor (gera `gameserver.exe` no Windows):
 
-1. Instale o Go e clone este repositório.
-2. Inicialize um novo módulo "jogo":
-
-```bash
-go mod init jogo
-go get -u github.com/nsf/termbox-go
+```powershell
+go build -tags server -o gameserver.exe .
+.\\gameserver.exe
 ```
 
-3. Compile o programa:
+- Compilar cliente (`jogo.exe`):
 
-Linux:
-
-```bash
-go build -o jogo
+```powershell
+go build -o jogo.exe .
+.\\jogo.exe
 ```
 
-Windows:
+Executando com variáveis de ambiente úteis
+- Definir porta do servidor (ex.: 8080):
 
-```bash
-go build -o jogo.exe
+```powershell
+$env:GAME_PORT = "8080"
+go run -tags server .
 ```
 
-Também é possivel compilar o projeto usando o comando `make` no Linux ou o script `build.bat` no Windows.
+- Forçar endereço do servidor ou ClientID no cliente:
 
-## Como executar
-
-1. Certifique-se de ter o arquivo `mapa.txt` com um mapa válido.
-2. Execute o programa no termimal:
-
-```bash
-./jogo
+```powershell
+$env:SERVER_ADDR = "127.0.0.1:12345"
+$env:CLIENT_ID = "playerA"
+go run .
 ```
 
-## Estrutura do projeto
+Rodar múltiplos clientes localmente
+- Abra múltiplos terminais e execute `go run .` em cada um, ou use o script PowerShell `scripts/start_clients.ps1`:
 
-- main.go — Ponto de entrada e loop principal
-- interface.go — Entrada, saída e renderização com termbox
-- jogo.go — Estruturas e lógica do estado do jogo
-- personagem.go — Ações do jogador
+```powershell
+# inicia 2 clientes em novos terminais (PowerShell Core assumed for Start-Process pwsh)
+.\\scripts\\start_clients.ps1 -Count 2
+```
+
+Polling / intervalos
+- O cliente faz polling de `GetState` periodicamente (padrão 300ms). Para ajustar o intervalo, defina `POLL_MS` em milissegundos:
+
+```powershell
+$env:POLL_MS = "500"
+go run .
+```
+
+Logs e depuração
+- O servidor e o cliente imprimem informações relevantes no terminal para depuração (requisições recebidas, respostas, erros de RPC e retries).
+
+Testes automatizados
+- Para executar a suíte de testes:
+
+```powershell
+go test ./...
+```
+
+Scripts de ajuda
+- Scripts adicionados em `scripts/`:
+	- `start_server.ps1` — inicia o servidor (aceita parâmetro `-Port`).
+	- `start_clients.ps1` — abre múltiplas instâncias do cliente em terminais novos.
+
+Notas finais
+- O servidor NÃO guarda o mapa nem a lógica de movimentação — isso continua sendo responsabilidade do cliente.
+- A persistência de `Seq` no cliente é atômica (escreve em arquivo temporário e renomeia), garantindo resiliência contra crashes durante a escrita.
+
+## Estado atual em relação aos requisitos do trabalho
+
+Resumo curto:
+- O servidor gerencia a sessão e o estado dos jogadores (posições, vidas). ✔
+- O servidor não mantém o mapa nem a lógica de movimentação (fica no cliente). ✔
+- Comunicação sempre iniciada pelos clientes; servidor apenas responde. ✔
+- Cliente possui goroutine de polling para `GetState`. ✔
+- Chamadas RPC têm retries/backoff implementados no cliente. ✔
+- Exactly-once (deduplicação por ClientID+Seq) implementado no servidor com TTL e limpeza. ✔
+
+Notas/pequenas recomendações: Persistência de Seq agora realizada de forma atômica no cliente; recomenda-se adicionar testes de falhas de rede.
+
+## Estrutura do projeto (resumida)
+
+- `server_main.go` — main do servidor (build tag `server`).
+- `server.go` — implementação do `GameServer`, deduplicação e `GetState`.
+- `client_rpc.go` — cliente RPC com retries e persistência de Seq.
+- `main.go` — cliente/jogo com loop principal e integração RPC.
+- `jogo.go`, `personagem.go`, `interface.go` — lógica do jogo local e UI.
+- `rpc_types.go` — tipos compartilhados (PlayerInfo, CommandArgs, etc.).
+- `server_rpc_test.go` — teste que valida exactly-once e GetState via RPC.
+
+---
+
+Se quiser, eu adiciono um passo-a-passo mais enxuto para apresentação (1 slide) ou crio scripts `start_server.ps1` / `start_clients.ps1` para automatizar demos locais — quer que eu crie isso agora?
 
 
