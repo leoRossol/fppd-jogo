@@ -1,3 +1,6 @@
+//go:build !server
+// +build !server
+
 // interface.go - Interface gráfica do jogo usando termbox
 // O código abaixo implementa a interface gráfica do jogo usando a biblioteca termbox-go.
 // A biblioteca termbox-go é uma biblioteca de interface de terminal que permite desenhar
@@ -47,22 +50,22 @@ func interfaceFinalizar() {
 
 // Lê um evento do teclado e o traduz para um EventoTeclado
 func interfaceLerEventoTeclado(canal chan EventoTeclado) {
-    for {
-        ev := termbox.PollEvent()
-        if ev.Type != termbox.EventKey {
-            continue
-        }
-        
-        var evento EventoTeclado
-        if ev.Key == termbox.KeyEsc {
-            evento = EventoTeclado{Tipo: "sair"}
-        } else if ev.Ch == 'e' {
-            evento = EventoTeclado{Tipo: "interagir"}
-        } else {
-            evento = EventoTeclado{Tipo: "mover", Tecla: ev.Ch}
-        }
-        canal <- evento
-    }
+	for {
+		ev := termbox.PollEvent()
+		if ev.Type != termbox.EventKey {
+			continue
+		}
+
+		var evento EventoTeclado
+		if ev.Key == termbox.KeyEsc {
+			evento = EventoTeclado{Tipo: "sair"}
+		} else if ev.Ch == 'e' {
+			evento = EventoTeclado{Tipo: "interagir"}
+		} else {
+			evento = EventoTeclado{Tipo: "mover", Tecla: ev.Ch}
+		}
+		canal <- evento
+	}
 }
 
 // Renderiza todo o estado atual do jogo na tela
@@ -92,11 +95,38 @@ func interfaceDesenharJogo(jogo *Jogo, armadilhas []*Armadilha, moeda *Moeda) {
 	// Desenha o personagem sobre o mapa
 	interfaceDesenharElemento(jogo.PosX, jogo.PosY, Personagem)
 
+	// === B) desenhar outros joadores
+	if len(jogo.OtherPlayers) > 0 {
+		remoteElem := Elemento{simbolo: '☺', cor: CorAmarelo, corFundo: CorPadrao, tangivel: true}
+		for _, p := range jogo.OtherPlayers {
+			if p.ID == LocalClientID {
+				continue
+			}
+			interfaceDesenharElemento(p.X, p.Y, remoteElem)
+		}
+	}
+	// TODO Member B: desenhar outros jogadores reportados pelo servidor
+	// - `jogo.OtherPlayers` deve ser preenchido pela goroutine de polling que chama rpcClient.GetState()
+	// - Evite desenhar o jogador local novamente: compare PlayerInfo.ID com o ClientID local
+	//   (é preciso que o ClientID local esteja disponível para a comparação; pode ser
+	//    armazenado em uma variável global `LocalClientID` ou passado para a função).
+	// Exemplo comentado (não ativar sem preparar ClientID/global):
+	// for _, p := range jogo.OtherPlayers {
+	//     if p.ID == LocalClientID { continue }
+	//     // desenhar um símbolo simples para outros jogadores, por exemplo '☺' com cor diferente
+	//     interfaceDesenharElemento(p.X, p.Y, Elemento{simbolo: '☺', cor: CorAmarelo, corFundo: CorPadrao, tangivel: true})
+	// }
+
 	// Desenha a barra de status
 	interfaceDesenharBarraDeStatus(jogo)
 
 	// Força a atualização do terminal
 	interfaceAtualizarTela()
+
+	// desenha painel de debug ao lado
+	interfaceDesenharDebugPanel(jogo)
+
+	termbox.Flush()
 }
 
 // Limpa a tela do terminal
@@ -127,4 +157,66 @@ func interfaceDesenharBarraDeStatus(jogo *Jogo) {
 	for i, c := range msg {
 		termbox.SetCell(i, len(jogo.Mapa)+3, c, CorTexto, CorPadrao)
 	}
+}
+
+func interfaceDesenharDebugPanel(jogo *Jogo) {
+	if !debugPanelEnabled {
+		return
+	}
+	debugPanelDrain()
+
+	w, h := termbox.Size()
+
+	mapH := len(jogo.Mapa)
+
+	// A barra de status usa duas linhas (y=mapH+1 e y=mapH+3).
+	top := mapH + 5
+	if top >= h {
+		return // sem espaço para painel
+	}
+
+	bg := termbox.ColorBlack
+	fg := termbox.ColorYellow
+
+	// Limpa a região do painel (toda a largura, do "top" até o fim)
+	for y := top; y < h; y++ {
+		for x := 0; x < w; x++ {
+			termbox.SetCell(x, y, ' ', fg, bg)
+		}
+	}
+
+	// título
+	tbPrint(1, top, fg|termbox.AttrBold, bg, "Logs (DEBUG_PANEL)")
+
+	// últimas linhas, de baixo para cima
+	maxLines := h - (top + 1)
+	if maxLines <= 0 {
+		return
+	}
+	lines := getDebugLines(maxLines)
+
+	y := top + 1
+	start := 0
+	if len(lines) > maxLines {
+		start = len(lines) - maxLines
+	}
+	for i := start; i < len(lines) && y < h; i++ {
+		line := truncateToWidth(lines[i], w-2)
+		tbPrint(1, y, termbox.ColorWhite, bg, line)
+		y++
+	}
+}
+
+// helpers simples para escrever texto e truncar
+func tbPrint(x, y int, fg, bg termbox.Attribute, msg string) {
+	for i, ch := range msg {
+		termbox.SetCell(x+i, y, ch, fg, bg)
+	}
+}
+
+func truncateToWidth(s string, w int) string {
+	if w <= 0 || len(s) <= w {
+		return s
+	}
+	return s[:w]
 }

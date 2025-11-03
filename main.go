@@ -1,3 +1,6 @@
+//go:build !server
+// +build !server
+
 // main.go - Loop principal do jogo
 package main
 
@@ -5,7 +8,62 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	// === B) imports
+	"crypto/rand"
+	"encoding/hex"
+	"strconv"
+	"strings"
 )
+
+// INSTRUÇÕES DE INTEGRAÇÃO (Member B)
+// --------------------------------------------------
+// Este arquivo contém o loop principal do cliente. Para integrar o modo multiplayer
+// via RPC, faça as seguintes alterações (comentadas aqui para orientar):
+// 1) Gerar e persistir um ClientID único no início do programa (ex: gravar em `.clientid`).
+// 2) Instanciar o RPC client: rpcClient := NewRPCClient(":12345", clientID)
+// 3) Chamar rpcClient.SendCommand("REGISTER", map[string]interface{}{"name": "playerX"})
+//    logo após carregar o mapa e criar o estado `jogo`.
+// 4) Iniciar uma goroutine de polling que periodicamente chama rpcClient.GetState()
+//    e atualiza `jogo.OtherPlayers` com o resultado. Intervalo recomendado: 200-500ms.
+//    Exemplo (pseudocódigo):
+//      go func() {
+//          for {
+//              state, err := rpcClient.GetState()
+//              if err == nil { jogo.OtherPlayers = state.Players }
+//              time.Sleep(300 * time.Millisecond)
+//          }
+//      }()
+// 5) Ao processar eventos de teclado, garantir que `personagemExecutarAcao` chame
+//    o rpcClient.SendCommand("UPDATE_POS", payload) logo após mover localmente.
+// 6) Certificar-se de que todos os logs de RPC sejam visíveis no terminal para depuração.
+// --------------------------------------------------
+
+// === B) variaveis globais para acesso em outros arquivos ===
+var (
+	rpcClient     *RPCClient
+	LocalClientID string
+)
+
+// === B) util para gerar/persistir clientID ===
+func loadOrCreateClientID(path string) (string, error) {
+	if b, err := os.ReadFile(path); err == nil {
+		id := strings.TrimSpace(string(b))
+		if id != "" {
+			return id, nil
+		}
+	}
+	// gera novo
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	id := hex.EncodeToString(buf)
+	if err := os.WriteFile(path, []byte(id), 0600); err != nil {
+		return "", err
+	}
+	return id, nil
+}
 
 func main() {
 	// Inicializa a interface (termbox)
@@ -16,6 +74,44 @@ func main() {
 	mapaFile := "mapa.txt"
 	if len(os.Args) > 1 {
 		mapaFile = os.Args[1]
+	}
+
+	// === B) Configurar RPC client ===
+	// Suporta CLIENTID_FILE ou CLIENT_ID_FILE (fallback para compatibilidade)
+	cidFile := os.Getenv("CLIENTID_FILE")
+	if cidFile == "" {
+		cidFile = os.Getenv("CLIENT_ID_FILE")
+	}
+	if cidFile == "" {
+		cidFile = ".clientid"
+	}
+	
+	var err error
+	if cid := os.Getenv("CLIENT_ID"); cid != "" {
+		LocalClientID = cid
+	} else {
+		LocalClientID, err = loadOrCreateClientID(cidFile)
+	}
+	if err != nil {
+		dbg.Printf("[CLIENT] erro ao ler/criar .clientid: %v", err)
+	}
+
+	// Suporta RPC_ADDR ou SERVER_ADDR (fallback)
+	serverAddr := os.Getenv("RPC_ADDR")
+	if serverAddr == "" {
+		serverAddr = os.Getenv("SERVER_ADDR")
+	}
+	if serverAddr == "" {
+		serverAddr = "127.0.0.1:12345"
+	}
+	
+	rpcClient = NewRPCClient(serverAddr, LocalClientID)
+
+	pollMS := 300
+	if v := os.Getenv("POLL_MS"); v != "" {
+		if n, convErr := strconv.Atoi(v); convErr == nil && n >= 50 {
+			pollMS = n
+		}
 	}
 
 	for {
@@ -33,6 +129,41 @@ func main() {
 		}
 
 		jogo.Pontos = -1
+
+		// === B) registrar e publicar posicao inicial ===
+		if rpcClient != nil {
+			// usar tipos tipados para payloads RPC
+			reg := RegisterPayload{Name: LocalClientID, X: jogo.PosX, Y: jogo.PosY}
+			go func() { _, _ = rpcClient.SendCommand("REGISTER", reg) }()
+
+			up := UpdatePosPayload{X: jogo.PosX, Y: jogo.PosY, Lives: jogo.Pontos}
+			go func() { _, _ = rpcClient.SendCommand("UPDATE_POS", up) }()
+		}
+		// polling getstate -> envia para stateChan (evitar datarace)
+		stateChan := make(chan StateReply, 1)
+		go func(intervalMS int, stop <-chan struct{}) {
+			ticker := time.NewTicker(time.Duration(intervalMS) * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-ticker.C:
+					if rpcClient == nil {
+						continue
+					}
+					st, err := rpcClient.GetState()
+					if err != nil {
+						dbg.Printf("[CLIENT] polling erro: %v\n", err)
+						continue
+					}
+					select {
+					case stateChan <- st:
+					default:
+					}
+				}
+			}
+		}(pollMS, done)
 
 		// Inicia a goroutine para ler eventos do teclado
 		go interfaceLerEventoTeclado(canalTeclado)
@@ -85,11 +216,11 @@ func main() {
 					jogo.StatusMsg = "O MONSTRO TE PEGOU, VOCE MORREU"
 					interfaceDesenharJogo(&jogo, armadilhas, moeda)
 					time.Sleep(2 * time.Second)
-					
+
 					// Exibe quantas moedas foram coletadas
 					jogo.StatusMsg = "GAME OVER! Você coletou " + fmt.Sprintf("%d", jogo.Pontos) + " moedas antes de morrer. Pressione qualquer tecla para continuar..."
 					interfaceDesenharJogo(&jogo, armadilhas, moeda)
-					
+
 					// Espera o jogador pressionar uma tecla para continuar
 					<-canalTeclado
 					rodando = false
@@ -98,11 +229,11 @@ func main() {
 				jogo.StatusMsg = "CAIU EM UMA ARMADILHA, VOCE MORREU"
 				interfaceDesenharJogo(&jogo, armadilhas, moeda)
 				time.Sleep(2 * time.Second)
-				
+
 				// Exibe quantas moedas foram coletadas
 				jogo.StatusMsg = "GAME OVER! Você coletou " + fmt.Sprintf("%d", jogo.Pontos) + " moedas antes de morrer. Pressione qualquer tecla para continuar..."
 				interfaceDesenharJogo(&jogo, armadilhas, moeda)
-				
+
 				// Espera o jogador pressionar uma tecla para continuar
 				<-canalTeclado
 				rodando = false
@@ -119,6 +250,11 @@ func main() {
 				if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
 					return
 				}
+			// === B) consumo do polling
+			case st := <-stateChan:
+				jogo.OtherPlayers = st.Players
+				jogo.StatusMsg = "Jogadores Online: " + strconv.Itoa(len(st.Players))
+
 			case <-time.After(50 * time.Millisecond):
 				// para atualizar a tela periodicamente
 				interfaceDesenharJogo(&jogo, armadilhas, moeda)

@@ -1,7 +1,23 @@
+//go:build !server
+// +build !server
+
 // personagem.go - Funções para movimentação e ações do personagem
 package main
 
 import "fmt"
+
+// personagem.go
+// --------------------------------------------------
+// Comentários/TODOs para Member B:
+// - Depois de integrar o RPC client, enviar um comando UPDATE_POS ao servidor sempre
+//   que o jogador se mover localmente. Não mova a lógica de movimentação para o servidor;
+//   o cliente continua sendo autoridade sobre seu próprio movimento.
+// - Exemplo de payload:
+//     payload := map[string]interface{}{"x": nx, "y": ny, "lives": jogo.Pontos}
+//     rpcClient.SendCommand("UPDATE_POS", payload)
+// - Armazene/recupere o rpcClient a partir de uma variável global acessível aqui ou passe-o
+//   como parâmetro (ex: personagemMover(tecla, jogo, rpcClient)).
+// --------------------------------------------------
 
 // Atualiza a posição do personagem com base na tecla pressionada (WASD)
 func personagemMover(tecla rune, jogo *Jogo) {
@@ -22,6 +38,14 @@ func personagemMover(tecla rune, jogo *Jogo) {
 	if jogoPodeMoverPara(jogo, nx, ny) {
 		jogoMoverElemento(jogo, jogo.PosX, jogo.PosY, dx, dy)
 		jogo.PosX, jogo.PosY = nx, ny
+
+		// === B) reportar posicao ao servidor
+		if rpcClient != nil {
+			up := UpdatePosPayload{X: jogo.PosX, Y: jogo.PosY, Lives: jogo.Pontos}
+			go func() {
+				_, _ = rpcClient.SendCommand("UPDATE_POS", up)
+			}()
+		}
 	}
 }
 
@@ -46,5 +70,10 @@ func personagemExecutarAcao(ev EventoTeclado, jogo *Jogo) bool {
 		// Move o personagem com base na tecla
 		personagemMover(ev.Tecla, jogo)
 	}
+	// TODO Member B: Logo após mover (no caso "mover"), enviar UPDATE_POS via rpcClient.
+	// Se o rpcClient estiver disponível globalmente, chame aqui:
+	//   payload := map[string]interface{}{ "x": jogo.PosX, "y": jogo.PosY, "lives": jogo.Pontos }
+	//   rpcClient.SendCommand("UPDATE_POS", payload)
+
 	return true // Continua o jogo
 }

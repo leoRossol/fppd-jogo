@@ -1,3 +1,6 @@
+//go:build !server
+// +build !server
+
 // jogo.go - Funções para manipular os elementos do jogo, como carregar o mapa e mover o personagem
 package main
 
@@ -24,6 +27,9 @@ type Jogo struct {
 	StatusMsg          string       // mensagem para a barra de status
 	MonstroX, MonstroY int          //posicao atual do monstro
 	Pontos             int          //moedas coletadas
+	// OtherPlayers é preenchido pela goroutine de polling (chamada a GetState)
+	// TODO Member B: popular este campo com os dados retornados por rpcClient.GetState()
+	OtherPlayers []PlayerInfo
 }
 
 // mensagem do monstro
@@ -47,7 +53,7 @@ var canalArmadilha = make(chan ArmadilhaMsg)
 
 // config da msg
 type MoedaColetadaMsg struct {
-	Moeda   Moeda
+	Moeda    Moeda
 	Coletada bool
 }
 
@@ -199,13 +205,13 @@ func moedaLoop(moeda *Moeda, jogo *Jogo, canalMoeda chan<- Moeda, canalMoedaCole
 			if moedaColetada(moeda, jogo) {
 				// Envia mensagem que moeda foi coletada
 				canalMoedaColetada <- MoedaColetadaMsg{
-					Moeda:   *moeda,
+					Moeda:    *moeda,
 					Coletada: true,
 				}
-				
+
 				// Incrementa pontos
 				jogo.Pontos++
-				
+
 				// Gera nova posição para a moeda
 				for {
 					nx := r.Intn(len(jogo.Mapa[0]))
